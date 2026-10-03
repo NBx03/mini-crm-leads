@@ -1,14 +1,16 @@
+import os
 from datetime import timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 import psycopg
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
-from app import leads, tags
+from app import auth, leads, tags
 
 load_dotenv()
 
@@ -16,6 +18,13 @@ MSK = timezone(timedelta(hours=3))
 NAME_MAX, CONTACT_MAX, REQUEST_MAX = 200, 200, 2000
 
 app = FastAPI()
+# Сессия лежит в подписанной cookie: на Vercel нет общей памяти между запросами.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ["SESSION_SECRET"],
+    https_only=bool(os.environ.get("VERCEL")),
+)
+crm = APIRouter(dependencies=[Depends(auth.require_login)])
 templates = Jinja2Templates(directory=Path(__file__).with_name("templates"))
 templates.env.filters["msk"] = lambda dt: dt.astimezone(MSK).strftime("%d.%m.%Y %H:%M")
 
@@ -39,12 +48,27 @@ def render_index(request: Request, tag_filter="", error=None, form=None, status_
     )
 
 
-@app.get("/")
+@app.get("/login")
+def login_form(request: Request):
+    return templates.TemplateResponse(request, "login.html", {})
+
+
+@app.post("/login")
+def login(request: Request, password: str = Form("")):
+    if not auth.check_password(password):
+        return templates.TemplateResponse(
+            request, "login.html", {"error": "Неверный пароль"}, status_code=401
+        )
+    request.session["auth"] = True
+    return RedirectResponse("/", status_code=303)
+
+
+@crm.get("/")
 def index(request: Request, tag: str = ""):
     return render_index(request, tags.normalize_tag(tag))
 
 
-@app.post("/leads")
+@crm.post("/leads")
 def add_lead(
     request: Request,
     name: str = Form(""),
@@ -61,7 +85,7 @@ def add_lead(
     return RedirectResponse("/", status_code=303)
 
 
-@app.post("/leads/{lead_id}/tags")
+@crm.post("/leads/{lead_id}/tags")
 def add_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
     try:
         tags.add_tag(lead_id, tag)
@@ -70,7 +94,10 @@ def add_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
     return RedirectResponse(index_url(tag_filter), status_code=303)
 
 
-@app.post("/leads/{lead_id}/tags/remove")
+@crm.post("/leads/{lead_id}/tags/remove")
 def remove_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
     tags.remove_tag(lead_id, tag)
     return RedirectResponse(index_url(tag_filter), status_code=303)
+
+
+app.include_router(crm)
