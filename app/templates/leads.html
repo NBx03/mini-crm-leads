@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<form class="add" method="post" action="/leads">
+  <strong>Новый лид</strong>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input name="name" placeholder="Имя" maxlength="200" required value="{{ form.name or '' }}">
+  <input name="contact" placeholder="Контакт (телефон, e-mail, @username)" maxlength="200" value="{{ form.contact or '' }}">
+  <textarea name="request" placeholder="Запрос" rows="3" maxlength="2000">{{ form.request or '' }}</textarea>
+  <button type="submit">Добавить</button>
+</form>
+
+{% if leads %}
+<table>
+  <tr><th>Дата (МСК)</th><th>Имя</th><th>Контакт</th><th>Запрос</th><th>Источник</th></tr>
+  {% for lead in leads %}
+  <tr>
+    <td>{{ lead.created_at | msk }}</td>
+    <td>{{ lead.name }}</td>
+    <td>{{ lead.contact }}</td>
+    <td>{{ lead.request }}</td>
+    <td>{{ 'Telegram-бот' if lead.source == 'bot' else 'Вручную' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">Лидов пока нет.</p>
+{% endif %}
+{% endblock %}
