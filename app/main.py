@@ -1,16 +1,18 @@
 import os
+import secrets
 from datetime import timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 import psycopg
-from fastapi import APIRouter, Depends, FastAPI, Form, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, FastAPI, Form, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, leads, tags
+from app import auth, bot, leads, tags
+from app.db import connect
 
 load_dotenv()
 
@@ -79,16 +81,18 @@ def add_lead(
     if not name:
         form = {"name": name, "contact": contact, "request": lead_request}
         return render_index(request, error="Укажите имя", form=form, status_code=422)
-    leads.create_lead(
-        name[:NAME_MAX], contact[:CONTACT_MAX], lead_request[:REQUEST_MAX], "manual"
-    )
+    with connect() as conn:
+        leads.create_lead(
+            conn, name[:NAME_MAX], contact[:CONTACT_MAX], lead_request[:REQUEST_MAX], "manual"
+        )
     return RedirectResponse("/", status_code=303)
 
 
 @crm.post("/leads/{lead_id}/tags")
 def add_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
     try:
-        tags.add_tag(lead_id, tag)
+        with connect() as conn:
+            tags.add_tag(conn, lead_id, tag)
     except psycopg.errors.ForeignKeyViolation:
         raise HTTPException(404, "Лид не найден")
     return RedirectResponse(index_url(tag_filter), status_code=303)
@@ -96,8 +100,21 @@ def add_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
 
 @crm.post("/leads/{lead_id}/tags/remove")
 def remove_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
-    tags.remove_tag(lead_id, tag)
+    with connect() as conn:
+        tags.remove_tag(conn, lead_id, tag)
     return RedirectResponse(index_url(tag_filter), status_code=303)
+
+
+@app.post("/webhook")
+def telegram_webhook(
+    update: dict = Body(...),
+    x_telegram_bot_api_secret_token: str = Header(""),
+):
+    expected = os.environ["TELEGRAM_WEBHOOK_SECRET"]
+    if not secrets.compare_digest(x_telegram_bot_api_secret_token.encode(), expected.encode()):
+        raise HTTPException(403)
+    bot.process_update(update)
+    return {"ok": True}
 
 
 app.include_router(crm)

@@ -24,11 +24,10 @@ def list_leads(tag=None):
         ).fetchall()
 
 
-def create_lead(name, contact, request, source, tg_id=None, tg_username=None):
-    with connect() as conn:
-        row = conn.execute(
-            "INSERT INTO leads (name, contact, request, source, tg_id, tg_username) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (name, contact, request, source, tg_id, tg_username),
-        ).fetchone()
-        return row["id"]
+def create_lead(conn, name, contact, request, source, tg_id=None, tg_username=None):
+    row = conn.execute(
+        "INSERT INTO leads (name, contact, request, source, tg_id, tg_username) "
+        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (name, contact, request, source, tg_id, tg_username),
+    ).fetchone()
+    return row["id"]
