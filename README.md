@@ -21,6 +21,7 @@ Python 3.11+, FastAPI, Jinja2, PostgreSQL (Neon), хостинг Vercel, Telegra
 | `app/schema.sql`, `app/init_db.py` | Схема БД и её создание |
 | `app/set_webhook.py` | Регистрация webhook в Telegram |
 | `app/templates/` | HTML-шаблоны |
+| `tests/` | Тесты нормализации тегов и диалога |
 
 ## Переменные окружения
 
@@ -76,6 +77,14 @@ python -m uvicorn app.main:app --port 8000
 ```
 
 CRM откроется на http://localhost:8000. Бот локально не получает сообщения: Telegram отправляет их только на публичный HTTPS-адрес, поэтому диалог проверяется на задеплоенной версии.
+
+## Тесты
+
+```bash
+python -m pytest
+```
+
+Тесты проверяют нормализацию тегов и диалог бота. БД и сеть им не нужны, `.env` тоже.
 
 ## Деплой на Vercel
 
