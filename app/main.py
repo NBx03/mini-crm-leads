@@ -1,12 +1,14 @@
 from datetime import timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request
+import psycopg
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app import leads
+from app import leads, tags
 
 load_dotenv()
 
@@ -18,18 +20,28 @@ templates = Jinja2Templates(directory=Path(__file__).with_name("templates"))
 templates.env.filters["msk"] = lambda dt: dt.astimezone(MSK).strftime("%d.%m.%Y %H:%M")
 
 
-def render_index(request: Request, error=None, form=None, status_code=200):
+def index_url(tag_filter):
+    return "/?" + urlencode({"tag": tag_filter}) if tag_filter else "/"
+
+
+def render_index(request: Request, tag_filter="", error=None, form=None, status_code=200):
     return templates.TemplateResponse(
         request,
         "leads.html",
-        {"leads": leads.list_leads(), "error": error, "form": form or {}},
+        {
+            "leads": leads.list_leads(tag_filter or None),
+            "used_tags": tags.list_used_tags(),
+            "tag_filter": tag_filter,
+            "error": error,
+            "form": form or {},
+        },
         status_code=status_code,
     )
 
 
 @app.get("/")
-def index(request: Request):
-    return render_index(request)
+def index(request: Request, tag: str = ""):
+    return render_index(request, tags.normalize_tag(tag))
 
 
 @app.post("/leads")
@@ -47,3 +59,18 @@ def add_lead(
         name[:NAME_MAX], contact[:CONTACT_MAX], lead_request[:REQUEST_MAX], "manual"
     )
     return RedirectResponse("/", status_code=303)
+
+
+@app.post("/leads/{lead_id}/tags")
+def add_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
+    try:
+        tags.add_tag(lead_id, tag)
+    except psycopg.errors.ForeignKeyViolation:
+        raise HTTPException(404, "Лид не найден")
+    return RedirectResponse(index_url(tag_filter), status_code=303)
+
+
+@app.post("/leads/{lead_id}/tags/remove")
+def remove_lead_tag(lead_id: int, tag: str = Form(""), tag_filter: str = Form("")):
+    tags.remove_tag(lead_id, tag)
+    return RedirectResponse(index_url(tag_filter), status_code=303)

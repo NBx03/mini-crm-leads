@@ -9,9 +9,19 @@
   <button type="submit">Добавить</button>
 </form>
 
+{% if used_tags %}
+<div class="filter">
+  <span class="muted">Теги:</span>
+  <a href="/" class="{{ '' if tag_filter else 'active' }}">все</a>
+  {% for t in used_tags %}
+  <a href="/?tag={{ t.name | urlencode }}" class="{{ 'active' if t.name == tag_filter else '' }}">{{ t.name }} ({{ t.leads_count }})</a>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if leads %}
 <table>
-  <tr><th>Дата (МСК)</th><th>Имя</th><th>Контакт</th><th>Запрос</th><th>Источник</th></tr>
+  <tr><th>Дата (МСК)</th><th>Имя</th><th>Контакт</th><th>Запрос</th><th>Источник</th><th>Теги</th></tr>
   {% for lead in leads %}
   <tr>
     <td>{{ lead.created_at | msk }}</td>
@@ -19,10 +29,25 @@
     <td>{{ lead.contact }}</td>
     <td>{{ lead.request }}</td>
     <td>{{ 'Telegram-бот' if lead.source == 'bot' else 'Вручную' }}</td>
+    <td>
+      {% for t in lead.tags %}
+      <span class="chip">{{ t }}
+        <form class="inline" method="post" action="/leads/{{ lead.id }}/tags/remove">
+          <input type="hidden" name="tag" value="{{ t }}">
+          <input type="hidden" name="tag_filter" value="{{ tag_filter }}">
+          <button type="submit" title="Убрать тег">×</button>
+        </form>
+      </span>
+      {% endfor %}
+      <form class="inline tag-add" method="post" action="/leads/{{ lead.id }}/tags">
+        <input name="tag" placeholder="+ тег" maxlength="50" required>
+        <input type="hidden" name="tag_filter" value="{{ tag_filter }}">
+      </form>
+    </td>
   </tr>
   {% endfor %}
 </table>
 {% else %}
-<p class="muted">Лидов пока нет.</p>
+<p class="muted">{{ 'Нет лидов с таким тегом.' if tag_filter else 'Лидов пока нет.' }}</p>
 {% endif %}
 {% endblock %}
