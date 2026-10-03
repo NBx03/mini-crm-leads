@@ -19,7 +19,7 @@ load_dotenv()
 MSK = timezone(timedelta(hours=3))
 NAME_MAX, CONTACT_MAX, REQUEST_MAX = 200, 200, 2000
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 # Сессия лежит в подписанной cookie: на Vercel нет общей памяти между запросами.
 app.add_middleware(
     SessionMiddleware,

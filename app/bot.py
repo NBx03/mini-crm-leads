@@ -8,6 +8,8 @@ from app.db import connect
 
 BOT_TAG = "telegram-бот"
 log = logging.getLogger(__name__)
+# httpx на уровне INFO пишет в лог URL запроса, а в нём токен бота.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def send_message(chat_id, text):
@@ -51,7 +53,9 @@ def process_update(update):
             tags.add_tag(conn, lead_id, BOT_TAG)
 
     # Сбой отправки не должен вызывать повтор webhook: лид уже сохранён.
+    # Текст исключения httpx содержит URL с токеном бота, поэтому в лог идут только тип ошибки и код ответа.
     try:
         send_message(chat_id, reply)
-    except httpx.HTTPError:
-        log.exception("Не удалось отправить ответ в чат %s", chat_id)
+    except httpx.HTTPError as exc:
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else "-"
+        log.error("Не удалось отправить ответ в чат %s: %s, код %s", chat_id, type(exc).__name__, status)
